@@ -106,207 +106,161 @@ Tabs.Main2:AddButton({
 	Title = "Farm boss",                             -- 👈 tên nút hiển thị
 	Description = "nhấn vào để bật script ",-- 👈 mô tả
 	Callback = function()
---// SETTINGS
+--========================================================--
+--============  MENU THU NHỎ / MỞ RỘNG  ==================--
+--========================================================--
+
 local player = game.Players.LocalPlayer
 local char = player.Character or player.CharacterAdded:Wait()
 local hrp = char:WaitForChild("HumanoidRootPart")
 
-local gui = player.PlayerGui:WaitForChild("BossMenu")
+-- GUI chính ở CoreGui (để tránh bị xoá bởi PlayerGui)
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = game.CoreGui
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Name = "FarmBossGUI"
 
-local kcBox = gui.Frame:WaitForChild("TextBox") -- Khoảng cách
-local spBox = gui.Frame:WaitForChild("TextBox2") -- Tốc độ quay
-local autoBtn = gui.Frame:WaitForChild("AutoBtn")
-local noclipBtn = gui.Frame:WaitForChild("NoclipBtn")
-local hpLabel = gui.Frame:WaitForChild("HP")
+--=============================
+-- NÚT MỞ MENU
+--=============================
+local ToggleButton = Instance.new("ImageButton")
+ToggleButton.Parent = ScreenGui
+ToggleButton.Size = UDim2.new(0, 55, 0, 55)
+ToggleButton.Position = UDim2.new(0, 20, 0, 200)
+ToggleButton.Image = "rbxassetid://3926307971"
+ToggleButton.ImageRectOffset = Vector2.new(4, 4)
+ToggleButton.ImageRectSize = Vector2.new(36, 36)
+ToggleButton.BackgroundTransparency = 1
 
-local autoFarm = false
-local noclip = false
+--=============================
+-- FRAME MENU FARM BOSS
+--=============================
+local FarmBossMenu = Instance.new("Frame")
+FarmBossMenu.Parent = ScreenGui
+FarmBossMenu.Size = UDim2.new(0, 420, 0, 360)
+FarmBossMenu.Position = UDim2.new(0.5, -210, 0.5, -180)
+FarmBossMenu.BackgroundColor3 = Color3.fromRGB(40,40,40)
+FarmBossMenu.Visible = false
+FarmBossMenu.Active = true
+FarmBossMenu.Draggable = true
+FarmBossMenu.BorderSizePixel = 0
 
------------------------
--- NOCLIP SYSTEM
------------------------
-game:GetService("RunService").Stepped:Connect(function()
-    if noclip and char then
-        for _, v in pairs(char:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.CanCollide = false
-            end
-        end
-    end
+Instance.new("UICorner", FarmBossMenu).CornerRadius = UDim.new(0, 12)
+
+--=============================
+-- TITLE
+--=============================
+local Title = Instance.new("TextLabel")
+Title.Parent = FarmBossMenu
+Title.Size = UDim2.new(1, 0, 0, 45)
+Title.BackgroundColor3 = Color3.fromRGB(20,20,20)
+Title.Text = "FARM BOSS 👾"
+Title.Font = Enum.Font.GothamBold
+Title.TextSize = 26
+Title.TextColor3 = Color3.new(1,1,1)
+
+--=============================
+-- NÚT ĐÓNG MENU
+--=============================
+local CloseButton = Instance.new("TextButton")
+CloseButton.Parent = FarmBossMenu
+CloseButton.Size = UDim2.new(0, 40, 0, 40)
+CloseButton.Position = UDim2.new(1, -50, 0, 3)
+CloseButton.Text = "✖"
+CloseButton.TextScaled = true
+CloseButton.BackgroundTransparency = 1
+CloseButton.TextColor3 = Color3.fromRGB(255,80,80)
+
+CloseButton.MouseButton1Click:Connect(function()
+    FarmBossMenu.Visible = false
 end)
 
-noclipBtn.MouseButton1Click:Connect(function()
-    noclip = not noclip
-    noclipBtn.Text = noclip and "TẮT: Noclip" or "BẬT: Noclip"
-end)
+--=============================
+-- NÚT BẬT AUTO FARM
+--=============================
+local BtnFarm = Instance.new("TextButton")
+BtnFarm.Parent = FarmBossMenu
+BtnFarm.Size = UDim2.new(1, -40, 0, 50)
+BtnFarm.Position = UDim2.new(0, 20, 0, 70)
+BtnFarm.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+BtnFarm.Text = "Bật Script Farm Boss"
+BtnFarm.TextColor3 = Color3.fromRGB(255, 255, 255)
+BtnFarm.Font = Enum.Font.GothamBold
+BtnFarm.TextSize = 22
 
------------------------
--- FIND NEAREST BOSS
------------------------
-function getNearestBoss()
-    local nearest = nil
-    local dist = math.huge
+Instance.new("UICorner", BtnFarm).CornerRadius = UDim.new(0, 10)
 
-    for _, mob in pairs(workspace:GetDescendants()) do
+--=============================
+-- LABEL HIỆN MÁU BOSS
+--=============================
+local hpLabel = Instance.new("TextLabel")
+hpLabel.Parent = FarmBossMenu
+hpLabel.Position = UDim2.new(0, 20, 0, 130)
+hpLabel.Size = UDim2.new(1, -40, 0, 35)
+hpLabel.Text = "Máu Boss: ..."
+hpLabel.Font = Enum.Font.GothamBold
+hpLabel.TextSize = 22
+hpLabel.BackgroundTransparency = 1
+hpLabel.TextColor3 = Color3.fromRGB(255, 60, 60)
+
+--=============================
+-- LOGIC TÌM BOSS
+--=============================
+local function findBoss()
+    local nearest, dist = nil, math.huge
+    for _, mob in ipairs(workspace:GetDescendants()) do
         if mob:FindFirstChild("Humanoid") and mob:FindFirstChild("HumanoidRootPart") then
             if mob.Humanoid.Health > 0 then
                 local d = (mob.HumanoidRootPart.Position - hrp.Position).Magnitude
                 if d < dist then
-                    dist = d
                     nearest = mob
+                    dist = d
                 end
             end
         end
     end
-
     return nearest
 end
 
------------------------
--- AUTO ATTACK FUNCTION
------------------------
-function attack()
+local function attack()
     local tool = char:FindFirstChildOfClass("Tool")
-    if tool and tool:FindFirstChild("Handle") then
-        tool:Activate()
-    end
+    if tool then tool:Activate() end
 end
 
------------------------
--- AUTO FARM LOOP
------------------------
-autoBtn.MouseButton1Click:Connect(function()
+--=============================
+-- BẬT/TẮT AUTO FARM
+--=============================
+local autoFarm = false
+
+BtnFarm.MouseButton1Click:Connect(function()
     autoFarm = not autoFarm
-    autoBtn.Text = autoFarm and "TẮT: Auto Đánh" or "BẬT: Auto Đánh"
+    BtnFarm.Text = autoFarm and "TẮT Script Farm Boss" or "Bật Script Farm Boss"
 
     while autoFarm do
         task.wait(0.05)
 
-        local boss = getNearestBoss()
-        if boss == nil then
-            hpLabel.Text = "Máu mục tiêu: Không tìm thấy!"
-            continue
+        local boss = findBoss()
+        if not boss then
+            hpLabel.Text = "Không tìm thấy Boss!"
+        else
+            hpLabel.Text = "Máu Boss: " .. math.floor(boss.Humanoid.Health)
+            
+            -- đưa người chơi lên đầu boss để đánh
+            local pos = boss.HumanoidRootPart.Position + Vector3.new(0, 25, 0)
+            hrp.CFrame = CFrame.new(pos)
+
+            attack()
         end
-
-        local bossHRP = boss:FindFirstChild("HumanoidRootPart")
-        if not bossHRP then continue end
-
-        hpLabel.Text = "Máu mục tiêu: " .. math.floor(boss.Humanoid.Health)
-
-        local kc = tonumber(kcBox.Text) or 25
-        local spin = tonumber(spBox.Text) or 2
-        
-        -- BAY TRÊN ĐẦU BOSS
-        local abovePos = bossHRP.Position + Vector3.new(0, kc, 0)
-
-        hrp.CFrame = CFrame.new(abovePos) * CFrame.Angles(0, math.rad(tick() * spin * 60), 0)
-
-        -- TẤN CÔNG LIÊN TỤC
-        attack()
     end
-end)	
--- Tạo ScreenGui
-local gui = Instance.new("ScreenGui", game.Players.LocalPlayer.PlayerGui)
-gui.Name = "BossMenu"
+end)
 
--- Khung chính
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 420, 0, 350)
-main.Position = UDim2.new(0.5, -210, 0.5, -175)
-main.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-main.BorderSizePixel = 0
+--=============================
+-- NÚT THU NHỎ / MỞ RỘNG
+--=============================
+local Opened = false
+ToggleButton.MouseButton1Click:Connect(function()
+    Opened = not Opened
+    FarmBossMenu.Visible = Opened
+end)
 
--- Tiêu đề
-local title = Instance.new("TextLabel", main)
-title.Size = UDim2.new(1, 0, 0, 40)
-title.Text = "BẬT: Đánh Boss"
-title.TextColor3 = Color3.new(1,1,1)
-title.BackgroundColor3 = Color3.fromRGB(20,20,20)
-title.Font = Enum.Font.GothamBold
-title.TextSize = 24
-
--- Ô khoảng cách
-local kcLabel = Instance.new("TextLabel", main)
-kcLabel.Position = UDim2.new(0, 20, 0, 60)
-kcLabel.Size = UDim2.new(0, 150, 0, 35)
-kcLabel.Text = "Khoảng cách:"
-kcLabel.TextColor3 = Color3.new(1,1,1)
-kcLabel.BackgroundTransparency = 1
-kcLabel.Font = Enum.Font.Gotham
-kcLabel.TextSize = 20
-
-local kcBox = Instance.new("TextBox", main)
-kcBox.Position = UDim2.new(0, 200, 0, 60)
-kcBox.Size = UDim2.new(0, 80, 0, 35)
-kcBox.Text = "30"
-kcBox.Font = Enum.Font.Gotham
-kcBox.TextSize = 20
-kcBox.BackgroundColor3 = Color3.fromRGB(60,60,60)
-kcBox.TextColor3 = Color3.new(1,1,1)
-
--- Ô tốc độ quay
-local spLabel = Instance.new("TextLabel", main)
-spLabel.Position = UDim2.new(0, 20, 0, 110)
-spLabel.Size = UDim2.new(0, 150, 0, 35)
-spLabel.Text = "Tốc độ quay:"
-spLabel.TextColor3 = Color3.new(1,1,1)
-spLabel.Font = Enum.Font.Gotham
-spLabel.TextSize = 20
-spLabel.BackgroundTransparency = 1
-
-local spBox = Instance.new("TextBox", main)
-spBox.Position = UDim2.new(0, 200, 0, 110)
-spBox.Size = UDim2.new(0, 80, 0, 35)
-spBox.Text = "2.3"
-spBox.Font = Enum.Font.Gotham
-spBox.TextSize = 20
-spBox.BackgroundColor3 = Color3.fromRGB(60,60,60)
-spBox.TextColor3 = Color3.new(1,1,1)
-
--- Màu mục tiêu
-local hpLabel = Instance.new("TextLabel", main)
-hpLabel.Position = UDim2.new(0, 20, 0, 155)
-hpLabel.Size = UDim2.new(1, -40, 0, 30)
-hpLabel.Text = "Máu mục tiêu: ..."
-hpLabel.TextColor3 = Color3.fromRGB(255,50,50)
-hpLabel.Font = Enum.Font.GothamBold
-hpLabel.TextSize = 20
-hpLabel.BackgroundTransparency = 1
-
--- Nút Auto Đánh
-local autoBtn = Instance.new("TextButton", main)
-autoBtn.Position = UDim2.new(0, 20, 0, 200)
-autoBtn.Size = UDim2.new(1, -40, 0, 40)
-autoBtn.Text = "BẬT: Auto Đánh"
-autoBtn.Font = Enum.Font.GothamBold
-autoBtn.TextColor3 = Color3.new(1,1,1)
-autoBtn.TextSize = 22
-autoBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
-
--- Nút Noclip
-local noclipBtn = Instance.new("TextButton", main)
-noclipBtn.Position = UDim2.new(0, 20, 0, 250)
-noclipBtn.Size = UDim2.new(1, -40, 0, 40)
-noclipBtn.Text = "BẬT: Noclip"
-noclipBtn.Font = Enum.Font.GothamBold
-noclipBtn.TextColor3 = Color3.new(1,1,1)
-noclipBtn.TextSize = 22
-noclipBtn.BackgroundColor3 = Color3.fromRGB(70,70,70)
-
--- Dòng trạng thái
-local status = Instance.new("TextLabel", main)
-status.Position = UDim2.new(0, 20, 0, 300)
-status.Size = UDim2.new(1, -40, 0, 35)
-status.Text = "TT:Mất Quyền Truy Cập"
-status.TextColor3 = Color3.fromRGB(50,255,50)
-status.Font = Enum.Font.GothamBold
-status.TextSize = 22
-status.BackgroundTransparency = 1
-		local Settings = {
-			JoinTeam = "Pirates";   -- 👈 team mặc định: Pirates hoặc Marines
-			Translator = true;      -- 👈 bật dịch sang tiếng Việt nếu có
-		}
-		loadstring(game:HttpGet("https://raw.githubusercontent.com/AhmadV99/Speed-Hub-X/main/Speed%20Hub%20X.lua", true))() -- 👈 link script tải
-	end
-})
-
+print("Farm Boss GUI Loaded!")
